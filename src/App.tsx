@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, Files, X } from 'lucide-react';
 import { MBOXParser, ParseResult, ParsedEmail } from './services/MBOXParser';
 
 function App() {
@@ -7,6 +7,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [workingSet, setWorkingSet] = useState<ParsedEmail[]>([]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -15,6 +17,8 @@ function App() {
     setIsLoading(true);
     setError(null);
     setParseResult(null);
+    setSelectedEmails([]);
+    setWorkingSet([]);
 
     try {
       const content = await file.text();
@@ -30,6 +34,26 @@ function App() {
 
   const toggleEmail = (uid: string) => {
     setExpandedEmail(expandedEmail === uid ? null : uid);
+  };
+
+  const handleSelectEmail = (uid: string) => {
+    setSelectedEmails(prevSelected =>
+      prevSelected.includes(uid)
+        ? prevSelected.filter(id => id !== uid)
+        : [...prevSelected, uid]
+    );
+  };
+
+  const addToWorkingSet = () => {
+    if (!parseResult) return;
+    const emailsToAdd = parseResult.emails.filter(email => selectedEmails.includes(email.uid));
+    const newWorkingSet = [...workingSet];
+    emailsToAdd.forEach(email => {
+        if (!newWorkingSet.find(wsEmail => wsEmail.uid === email.uid)) {
+            newWorkingSet.push(email);
+        }
+    });
+    setWorkingSet(newWorkingSet);
   };
 
   const formatBytes = (bytes: number) => {
@@ -87,6 +111,29 @@ function App() {
 
         {parseResult && (
           <>
+             {workingSet.length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-2">
+                            <Files className="w-5 h-5 text-indigo-600" />
+                            <h3 className="font-semibold text-indigo-900">Working Set ({workingSet.length})</h3>
+                        </div>
+                        <button onClick={() => setWorkingSet([])} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1">
+                            <X className="w-4 h-4"/>
+                            Clear
+                        </button>
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {workingSet.map(email => (
+                            <div key={email.uid} className="text-sm text-indigo-800 p-2 bg-indigo-100 rounded">
+                                <p className="font-medium truncate">{email.metadata.subject}</p>
+                                <p className="text-xs">From: {email.metadata.from.join(', ')}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <div className="flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-green-600" />
@@ -143,17 +190,36 @@ function App() {
             )}
 
             <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-              <div className="bg-gray-100 px-6 py-3 border-b">
-                <h3 className="font-semibold text-gray-900">Parsed Emails</h3>
-              </div>
+                <div className="bg-gray-100 px-6 py-3 border-b flex justify-between items-center">
+                    <h3 className="font-semibold text-gray-900">Parsed Emails</h3>
+                    {selectedEmails.length > 0 && (
+                        <div className="flex items-center gap-2">
+                             <button onClick={() => setSelectedEmails([])} className="text-gray-600 hover:text-gray-800 text-sm font-medium">
+                                Clear Selection ({selectedEmails.length})
+                            </button>
+                            <button onClick={addToWorkingSet} className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm">
+                                Add to Working Set
+                            </button>
+                        </div>
+                    )}
+                </div>
               <div className="divide-y max-h-[600px] overflow-y-auto">
                 {parseResult.emails.map((email, idx) => (
-                  <div key={email.uid} className="hover:bg-gray-50">
+                  <div key={email.uid} className={`hover:bg-gray-50 ${selectedEmails.includes(email.uid) ? 'bg-blue-50' : ''}`}>
                     <div
                       className="p-4 cursor-pointer"
                       onClick={() => toggleEmail(email.uid)}
                     >
                       <div className="flex items-start gap-3">
+                        <input
+                            type="checkbox"
+                            className="mt-1.5"
+                            checked={selectedEmails.includes(email.uid)}
+                            onChange={(e) => {
+                                e.stopPropagation();
+                                handleSelectEmail(email.uid);
+                            }}
+                        />
                         <div className="mt-1">
                           {expandedEmail === email.uid ? (
                             <ChevronDown className="w-5 h-5 text-gray-400" />
